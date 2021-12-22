@@ -1,3 +1,16 @@
+# Train stdc1 on A2D2 dataset
+```bash
+python -m torch.distributed.launch \
+--nproc_per_node=1 train.py \
+--respath checkpoints/train_STDC1-Seg/ \
+--backbone STDCNet813 \
+--mode train \
+--n_workers_train 12 \
+--n_workers_val 1 \
+--max_iter 60000 \
+--use_boundary_8 True \
+--pretrain_path checkpoints/STDCNet813M_73.91.tar
+```
 # Rethinking BiSeNet For Real-time Semantic Segmentation[[PDF](https://openaccess.thecvf.com/content/CVPR2021/papers/Fan_Rethinking_BiSeNet_for_Real-Time_Semantic_Segmentation_CVPR_2021_paper.pdf)]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
