@@ -2,7 +2,11 @@
 # -*- encoding: utf-8 -*-
 from logger import setup_logger
 from models.model_stages import BiSeNet
-from cityscapes import CityScapes
+#like unet
+# from models.model_stages_up import BiSeNet
+#add a spatial path
+# from models.model_stages_sp import BiSeNet
+from A2D2Data import AudiDataset
 from loss.loss import OhemCELoss
 from loss.detail_loss import DetailAggregateLoss
 from evaluation import MscEvalV0
@@ -56,7 +60,7 @@ def parse_args():
             '--n_img_per_gpu',
             dest = 'n_img_per_gpu',
             type = int,
-            default = 16,
+            default = 8,
             )
     parse.add_argument(
             '--max_iter',
@@ -143,7 +147,7 @@ def train():
     args = parse_args()
     
     save_pth_path = os.path.join(args.respath, 'pths')
-    dspth = './data'
+    dspth = './A2D2'
     
     # print(save_pth_path)
     # print(osp.exists(save_pth_path))
@@ -155,14 +159,15 @@ def train():
     torch.cuda.set_device(args.local_rank)
     dist.init_process_group(
                 backend = 'nccl',
-                init_method = 'tcp://127.0.0.1:33274',
+                init_method = 'tcp://127.0.0.1:33279',
                 world_size = torch.cuda.device_count(),
                 rank=args.local_rank
                 )
     
     setup_logger(args.respath)
     ## dataset
-    n_classes = 19
+    # n_classes = 19
+    n_classes = 38
     n_img_per_gpu = args.n_img_per_gpu
     n_workers_train = args.n_workers_train
     n_workers_val = args.n_workers_val
@@ -185,7 +190,7 @@ def train():
         logger.info('mode: {}'.format(args.mode))
     
     
-    ds = CityScapes(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
+    ds = AudiDataset(dspth, cropsize=cropsize, mode=mode, randomscale=randomscale)
     sampler = torch.utils.data.distributed.DistributedSampler(ds)
     dl = DataLoader(ds,
                     batch_size = n_img_per_gpu,
@@ -195,7 +200,7 @@ def train():
                     pin_memory = False,
                     drop_last = True)
     # exit(0)
-    dsval = CityScapes(dspth, mode='val', randomscale=randomscale)
+    dsval = AudiDataset(dspth, mode='val', randomscale=randomscale)
     sampler_val = torch.utils.data.distributed.DistributedSampler(dsval)
     dlval = DataLoader(dsval,
                     batch_size = 2,
@@ -365,53 +370,53 @@ def train():
             loss_boundery_dice = []
             st = ed
             # print(boundary_loss_func.get_params())
-        if (it+1)%save_iter_sep==0:# and it != 0:
+        # if (it+1)%save_iter_sep==0:# and it != 0:
+        #     torch.cuda.empty_cache()
+        #     ## model
+        #     logger.info('evaluating the model ...')
+        #     logger.info('setup and restore model')
             
-            ## model
-            logger.info('evaluating the model ...')
-            logger.info('setup and restore model')
+        #     net.eval()
+
+        #     # ## evaluator
+        #     logger.info('compute the mIOU')
+        #     with torch.no_grad():
+        #         single_scale1 = MscEvalV0()
+        #         mIOU50 = single_scale1(net, dlval, n_classes)
+
+        #         single_scale2= MscEvalV0(scale=0.75)
+        #         mIOU75 = single_scale2(net, dlval, n_classes)
+
+
+        #     save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU50_{}_mIOU75_{}.pth'
+        #     .format(it+1, str(round(mIOU50,4)), str(round(mIOU75,4))))
             
-            net.eval()
+        #     state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
+        #     # if dist.get_rank()==0: 
+        #     #     torch.save(state, save_pth)
 
-            # ## evaluator
-            logger.info('compute the mIOU')
-            with torch.no_grad():
-                single_scale1 = MscEvalV0()
-                mIOU50 = single_scale1(net, dlval, n_classes)
+        #     logger.info('training iteration {}, model saved to: {}'.format(it+1, save_pth))
 
-                single_scale2= MscEvalV0(scale=0.75)
-                mIOU75 = single_scale2(net, dlval, n_classes)
-
-
-            save_pth = osp.join(save_pth_path, 'model_iter{}_mIOU50_{}_mIOU75_{}.pth'
-            .format(it+1, str(round(mIOU50,4)), str(round(mIOU75,4))))
-            
-            state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
-            if dist.get_rank()==0: 
-                torch.save(state, save_pth)
-
-            logger.info('training iteration {}, model saved to: {}'.format(it+1, save_pth))
-
-            if mIOU50 > maxmIOU50:
-                maxmIOU50 = mIOU50
-                save_pth = osp.join(save_pth_path, 'model_maxmIOU50.pth'.format(it+1))
-                state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
-                if dist.get_rank()==0: 
-                    torch.save(state, save_pth)
+        #     if mIOU50 > maxmIOU50:
+        #         maxmIOU50 = mIOU50
+        #         save_pth = osp.join(save_pth_path, 'model_maxmIOU50.pth'.format(it+1))
+        #         state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
+        #         if dist.get_rank()==0: 
+        #             torch.save(state, save_pth)
                     
-                logger.info('max mIOU model saved to: {}'.format(save_pth))
+        #         logger.info('max mIOU model saved to: {}'.format(save_pth))
             
-            if mIOU75 > maxmIOU75:
-                maxmIOU75 = mIOU75
-                save_pth = osp.join(save_pth_path, 'model_maxmIOU75.pth'.format(it+1))
-                state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
-                if dist.get_rank()==0: torch.save(state, save_pth)
-                logger.info('max mIOU model saved to: {}'.format(save_pth))
+        #     if mIOU75 > maxmIOU75:
+        #         maxmIOU75 = mIOU75
+        #         save_pth = osp.join(save_pth_path, 'model_maxmIOU75.pth'.format(it+1))
+        #         state = net.module.state_dict() if hasattr(net, 'module') else net.state_dict()
+        #         if dist.get_rank()==0: torch.save(state, save_pth)
+        #         logger.info('max mIOU model saved to: {}'.format(save_pth))
             
-            logger.info('mIOU50 is: {}, mIOU75 is: {}'.format(mIOU50, mIOU75))
-            logger.info('maxmIOU50 is: {}, maxmIOU75 is: {}.'.format(maxmIOU50, maxmIOU75))
+        #     logger.info('mIOU50 is: {}, mIOU75 is: {}'.format(mIOU50, mIOU75))
+        #     logger.info('maxmIOU50 is: {}, maxmIOU75 is: {}.'.format(maxmIOU50, maxmIOU75))
 
-            net.train()
+        #     net.train()
     
     ## dump the final model
     save_pth = osp.join(save_pth_path, 'model_final.pth')
