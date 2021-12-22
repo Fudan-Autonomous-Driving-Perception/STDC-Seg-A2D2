@@ -3,8 +3,6 @@ import torch.nn as nn
 from torch.nn import init
 import math
 
-
-
 class ConvX(nn.Module):
     def __init__(self, in_planes, out_planes, kernel=3, stride=1):
         super(ConvX, self).__init__()
