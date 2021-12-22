@@ -60,7 +60,7 @@ def parse_args():
             '--n_img_per_gpu',
             dest = 'n_img_per_gpu',
             type = int,
-            default = 8,
+            default = 4,
             )
     parse.add_argument(
             '--max_iter',
@@ -159,7 +159,7 @@ def train():
     torch.cuda.set_device(args.local_rank)
     dist.init_process_group(
                 backend = 'nccl',
-                init_method = 'tcp://127.0.0.1:33279',
+                init_method = 'tcp://127.0.0.1:33282',
                 world_size = torch.cuda.device_count(),
                 rank=args.local_rank
                 )
