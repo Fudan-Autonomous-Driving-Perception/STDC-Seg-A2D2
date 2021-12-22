@@ -3,7 +3,11 @@
 
 from logger import setup_logger
 from models.model_stages import BiSeNet
+# 根据情况，选择模型
+# from models.model_stages_sp import BiSeNet
+# from models.model_stages_up import BiSeNet
 from cityscapes import CityScapes
+from A2D2Data import AudiDataset
 
 import torch
 import torch.nn as nn
@@ -27,27 +31,24 @@ class MscEvalV0(object):
 
     def __call__(self, net, dl, n_classes):
         ## evaluate
-        hist = torch.zeros(n_classes, n_classes).cuda().detach()
+        hist = torch.zeros(n_classes, n_classes).detach()
         if dist.is_initialized() and dist.get_rank() != 0:
             diter = enumerate(dl)
         else:
             diter = enumerate(tqdm(dl))
         for i, (imgs, label) in diter:
-
             N, _, H, W = label.shape
-
-            label = label.squeeze(1).cuda()
+            label = label.squeeze(1)
             size = label.size()[-2:]
 
             imgs = imgs.cuda()
 
             N, C, H, W = imgs.size()
-            new_hw = [int(H*self.scale), int(W*self.scale)]
+            # new_hw = [int(H*self.scale), int(W*self.scale)],改成了固定分辨率
+            new_hw = [768, 1024]
 
             imgs = F.interpolate(imgs, new_hw, mode='bilinear', align_corners=True)
-
-            logits = net(imgs)[0]
-  
+            logits = net(imgs)[0].cpu()
             logits = F.interpolate(logits, size=size,
                     mode='bilinear', align_corners=True)
             probs = torch.softmax(logits, dim=1)
@@ -60,8 +61,9 @@ class MscEvalV0(object):
         if dist.is_initialized():
             dist.all_reduce(hist, dist.ReduceOp.SUM)
         ious = hist.diag() / (hist.sum(dim=0) + hist.sum(dim=1) - hist.diag())
+        print(ious)
         miou = ious.mean()
-        return miou.item()
+        return miou.item(), ious
 
 def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', scale=0.75, use_boundary_2=False, use_boundary_4=False, use_boundary_8=False, use_boundary_16=False, use_conv_last=False):
     print('scale', scale)
@@ -70,16 +72,16 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
     print('use_boundary_8', use_boundary_8)
     print('use_boundary_16', use_boundary_16)
     ## dataset
-    batchsize = 5
-    n_workers = 2
-    dsval = CityScapes(dspth, mode='val')
+    batchsize = 6
+    n_workers = 8
+    dsval = AudiDataset(dspth, mode='val')
     dl = DataLoader(dsval,
                     batch_size = batchsize,
                     shuffle = False,
                     num_workers = n_workers,
                     drop_last = False)
 
-    n_classes = 19
+    n_classes = 38
     print("backbone:", backbone)
     net = BiSeNet(backbone=backbone, n_classes=n_classes,
      use_boundary_2=use_boundary_2, use_boundary_4=use_boundary_4, 
@@ -92,9 +94,10 @@ def evaluatev0(respth='./pretrained', dspth='./data', backbone='CatNetSmall', sc
 
     with torch.no_grad():
         single_scale = MscEvalV0(scale=scale)
-        mIOU = single_scale(net, dl, 19)
+        mIOU, ious = single_scale(net, dl, 38)
     logger = logging.getLogger()
     logger.info('mIOU is: %s\n', mIOU)
+    logger.info('ious is: %s\n', ious)
 
 class MscEval(object):
     def __init__(self,
@@ -267,15 +270,16 @@ if __name__ == "__main__":
     #STDC1-Seg75 mIoU 0.7450
     # evaluatev0('./checkpoints/STDC1-Seg/model_maxmIOU75.pth', dspth='./data', backbone='STDCNet813', scale=0.75, 
     # use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
-
+    evaluatev0('/home/audituser/cyr/STDC-Seg-A2D2/checkpoints/train_STDC1-Seg/pths/model_final.pth', dspth='/home/audituser/cyr/STDC-Seg-A2D2/A2D2', backbone='STDCNet813', scale=0.75, 
+    use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
 
     #STDC2-Seg50 mIoU 0.7424
     # evaluatev0('./checkpoints/STDC2-Seg/model_maxmIOU50.pth', dspth='./data', backbone='STDCNet1446', scale=0.5, 
     # use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
 
     #STDC2-Seg75 mIoU 0.7704
-    evaluatev0('./checkpoints/STDC2-Seg/model_maxmIOU75.pth', dspth='./data', backbone='STDCNet1446', scale=0.75, 
-    use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
+    # evaluatev0('./checkpoints/STDC2-Seg/model_maxmIOU75.pth', dspth='./data', backbone='STDCNet1446', scale=0.75, 
+    # use_boundary_2=False, use_boundary_4=False, use_boundary_8=True, use_boundary_16=False)
 
    
 
