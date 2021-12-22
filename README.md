@@ -1,4 +1,5 @@
 # Train stdc1 on A2D2 dataset
+### 可以到train.py中更换之前魔改的模型
 ```bash
 python -m torch.distributed.launch \
 --nproc_per_node=1 train.py \
