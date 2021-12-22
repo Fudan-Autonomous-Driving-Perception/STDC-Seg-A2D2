@@ -1,7 +1,5 @@
 #!/usr/bin/python
 # -*- encoding: utf-8 -*-
-
-
 from PIL import Image
 import PIL.ImageEnhance as ImageEnhance
 import random
@@ -108,9 +106,6 @@ class Compose(object):
         for comp in self.do_list:
             im_lb = comp(im_lb)
         return im_lb
-
-
-
 
 if __name__ == '__main__':
     flip = HorizontalFlip(p = 1)
